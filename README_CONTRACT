@@ -1,0 +1,7 @@
+1. solana config set --url devnet
+2. cargo build-bpf
+6. solana program deploy target/deploy/uge_prize.so
+7. npm run start
+
+
+2. cargo build-sbf

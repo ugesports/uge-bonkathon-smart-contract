@@ -1,0 +1,8 @@
+1. Init Token Sale
+   //seller account info
+   //temp token account - TokenAccount isolated by the amount of tokens to be sold
+   //token sale program account info - Save the data about token sale
+   //rent - To check if the rent fee is exempted
+   //token program - To change the owner of temp token account to token sale program
+2. Buy Token
+3. End Token Sale

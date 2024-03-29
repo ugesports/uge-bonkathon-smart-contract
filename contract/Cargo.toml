@@ -1,0 +1,22 @@
+[package]
+name = "uge-prize"
+version = "0.1.0"
+edition = "2018"
+
+
+[features]
+no-entrypoint = []
+
+[dependencies]
+solana-program = "=1.17.7"
+thiserror = "^1.0.56"
+arrayref = "0.3.6"
+ahash = "=0.8.6"
+borsh = "0.10"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
