@@ -12,8 +12,8 @@ pub enum PrizeError {
     #[error("Input data exceeds max length")]
     InvalidDataLength,
 
-    #[error("Rating greater than 5 or less than 1")]
-    InvalidRating,
+    #[error("Time is invalid")]
+    InvalidTime,
 }
 
 impl From<PrizeError> for ProgramError {

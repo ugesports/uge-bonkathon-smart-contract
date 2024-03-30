@@ -24,30 +24,83 @@ pub fn process_instruction(
     let instruction = PrizeInstruction::unpack(instruction_data)?;
     match instruction {
         PrizeInstruction::InitConfig {
-            title,
-            rating,
-            description,
-        } => init_config(program_id, accounts, title, rating, description),
+            total_prize,
+            first_prize,
+            second_prize,
+            third_prize,
+            first_account,
+            second_account,
+            third_account,
+            is_first_claimed,
+            is_second_claimed,
+            is_third_claimed,
+            start_time,
+            end_time,
+        } => init_config(
+            program_id,
+            accounts,
+            total_prize,
+            first_prize,
+            second_prize,
+            third_prize,
+            first_account,
+            second_account,
+            third_account,
+            is_first_claimed,
+            is_second_claimed,
+            is_third_claimed,
+            start_time,
+            end_time,
+        ),
         PrizeInstruction::UpdateConfig {
-            title,
-            rating,
-            description,
-        } => update_config(program_id, accounts, title, rating, description),
+            total_prize,
+            first_prize,
+            second_prize,
+            third_prize,
+            first_account,
+            second_account,
+            third_account,
+            is_first_claimed,
+            is_second_claimed,
+            is_third_claimed,
+            start_time,
+            end_time,
+        } => update_config(
+            program_id,
+            accounts,
+            total_prize,
+            first_prize,
+            second_prize,
+            third_prize,
+            first_account,
+            second_account,
+            third_account,
+            is_first_claimed,
+            is_second_claimed,
+            is_third_claimed,
+            start_time,
+            end_time,
+        ),
     }
 }
 
 pub fn init_config(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    title: String,
-    rating: u8,
-    description: String,
+    total_prize: u64,
+    first_prize: u64,
+    second_prize: u64,
+    third_prize: u64,
+    first_account: Pubkey,
+    second_account: Pubkey,
+    third_account: Pubkey,
+    is_first_claimed: bool,
+    is_second_claimed: bool,
+    is_third_claimed: bool,
+    start_time: u64,
+    end_time: u64,
 ) -> ProgramResult {
     msg!("Init config");
-    msg!("Title: {}", title);
-    msg!("Rating: {}", rating);
-    msg!("Description: {}", description);
-
     let account_info_iter = &mut accounts.iter();
 
     let initializer = next_account_info(account_info_iter)?;
@@ -68,12 +121,12 @@ pub fn init_config(
         return Err(ProgramError::InvalidArgument);
     }
 
-    if rating > 5 || rating < 1 {
-        msg!("Rating cannot be higher than 5");
-        return Err(PrizeError::InvalidRating.into());
+    if start_time > end_time {
+        msg!("Start time cannot be higher than End time");
+        return Err(PrizeError::InvalidTime.into());
     }
 
-    let total_len: usize = 1 + 1 + (4 + title.len()) + (4 + description.len());
+    let total_len: usize = 1 + 4 * 1 + 4 * 6 + 32 * 3;
     if total_len > 1000 {
         msg!("Data length is larger than 1000 bytes");
         return Err(PrizeError::InvalidDataLength.into());
@@ -99,7 +152,7 @@ pub fn init_config(
         ],
         &[&[
             initializer.key.as_ref(),
-            title.as_bytes().as_ref(),
+            "config-prize".as_bytes().as_ref(),
             &[bump_seed],
         ]],
     )?;
@@ -117,9 +170,18 @@ pub fn init_config(
         return Err(ProgramError::AccountAlreadyInitialized);
     }
 
-    account_data.title = title;
-    account_data.rating = rating;
-    account_data.description = description;
+    account_data.total_prize = total_prize;
+    account_data.first_prize = first_prize;
+    account_data.second_prize = second_prize;
+    account_data.third_prize = third_prize;
+    account_data.first_account = first_account;
+    account_data.second_account = second_account;
+    account_data.third_account = third_account;
+    account_data.is_first_claimed = is_first_claimed;
+    account_data.is_second_claimed = is_second_claimed;
+    account_data.is_third_claimed = is_third_claimed;
+    account_data.start_time = start_time;
+    account_data.end_time = end_time;
     account_data.is_initialized = true;
 
     msg!("serializing account");
@@ -132,9 +194,18 @@ pub fn init_config(
 pub fn update_config(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    _title: String,
-    rating: u8,
-    description: String,
+    total_prize: u64,
+    first_prize: u64,
+    second_prize: u64,
+    third_prize: u64,
+    first_account: Pubkey,
+    second_account: Pubkey,
+    third_account: Pubkey,
+    is_first_claimed: bool,
+    is_second_claimed: bool,
+    is_third_claimed: bool,
+    start_time: u64,
+    end_time: u64,
 ) -> ProgramResult {
     msg!("Updating config");
 
@@ -155,7 +226,6 @@ pub fn update_config(
     msg!("unpacking state account");
     let mut account_data =
         try_from_slice_unchecked::<ConfigState>(&pda_account.data.borrow()).unwrap();
-    msg!("review title: {}", account_data.title);
 
     let (pda, _bump_seed) = Pubkey::find_program_address(
         &[initializer.key.as_ref(), "config-prize".as_bytes().as_ref()],
@@ -172,29 +242,29 @@ pub fn update_config(
         return Err(PrizeError::UninitializedAccount.into());
     }
 
-    if rating > 5 || rating < 1 {
-        msg!("Invalid Rating");
-        return Err(PrizeError::InvalidRating.into());
+    if start_time > end_time {
+        msg!("Start time cannot be higher than End time");
+        return Err(PrizeError::InvalidTime.into());
     }
 
-    let update_len: usize = 1 + 1 + (4 + description.len()) + account_data.title.len();
-    if update_len > 1000 {
+    let total_len: usize = 1 + 4 * 1 + 4 * 6 + 32 * 3;
+    if total_len > 1000 {
         msg!("Data length is larger than 1000 bytes");
         return Err(PrizeError::InvalidDataLength.into());
     }
 
-    msg!("Review before update:");
-    msg!("Title: {}", account_data.title);
-    msg!("Rating: {}", account_data.rating);
-    msg!("Description: {}", account_data.description);
-
-    account_data.rating = rating;
-    account_data.description = description;
-
-    msg!("Review after update:");
-    msg!("Title: {}", account_data.title);
-    msg!("Rating: {}", account_data.rating);
-    msg!("Description: {}", account_data.description);
+    account_data.total_prize = total_prize;
+    account_data.first_prize = first_prize;
+    account_data.second_prize = second_prize;
+    account_data.third_prize = third_prize;
+    account_data.first_account = first_account;
+    account_data.second_account = second_account;
+    account_data.third_account = third_account;
+    account_data.is_first_claimed = is_first_claimed;
+    account_data.is_second_claimed = is_second_claimed;
+    account_data.is_third_claimed = is_third_claimed;
+    account_data.start_time = start_time;
+    account_data.end_time = end_time;
 
     msg!("serializing account");
     account_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
