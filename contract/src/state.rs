@@ -2,15 +2,16 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::program_pack::{IsInitialized, Sealed};
 
 #[derive(BorshSerialize, BorshDeserialize)]
-pub struct StudentInfo {
+pub struct ConfigState {
     pub is_initialized: bool,
-    pub name: String,
-    pub msg: String,
+    pub rating: u8,
+    pub description: String,
+    pub title: String,
 }
 
-impl Sealed for StudentInfo {}
+impl Sealed for ConfigState {}
 
-impl IsInitialized for StudentInfo {
+impl IsInitialized for ConfigState {
     fn is_initialized(&self) -> bool {
         self.is_initialized
     }

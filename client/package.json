@@ -1,39 +1,22 @@
 {
-  "name": "solana-bpf-boilerplate",
+  "name": "solana-movie-client",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "compile": "tsc -p ./tsconfig.json",
-    "setup-validator": "solana-test-validator -r --bpf-program 6uVMMaKnFo26KkS32PqJYTv7r3zWXS4BomSQxa1D1WxJ",
-    "setup": "npm run compile && node build/setup.js",
-    "start": "npm run compile && node build/setup.js && node build/startTokenSale.js",
-    "start:only": "npm run compile && node build/startTokenSale.js",
-    "buy": "npm run compile && node build/buyToken.js",
-    "close": "npm run compile && node build/closeTokenSale.js",
-    "all": "npm run compile && node build/setup.js && node build/startTokenSale.js && node build/buyToken.js && node build/closeTokenSale.js"
+    "start": "ts-node src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@types/bs58": "^4.0.1",
-    "@typescript-eslint/eslint-plugin": "^4.31.2",
-    "@typescript-eslint/parser": "^4.31.2",
-    "eslint": "^7.32.0",
-    "eslint-config-prettier": "^8.3.0",
-    "eslint-plugin-prettier": "^4.0.0",
-    "eslint-plugin-unused-imports": "^1.1.5",
-    "prettier": "^2.4.1",
-    "typescript": "^4.4.3"
+    "ts-node": "^10.7.0",
+    "typescript": "^4.6.4"
   },
   "dependencies": {
-    "@metaplex-foundation/js": "^0.20.1",
-    "@metaplex-foundation/mpl-token-metadata": "^2.8.6",
     "@project-serum/borsh": "^0.2.5",
-    "@solana/spl-token": "^0.3.11",
-    "@solana/web3.js": "^1.29.1",
-    "bignumber.js": "^4.0.4",
-    "bn.js": "^5.2.0",
-    "dotenv": "^16.3.2"
+    "@solana/web3.js": "^1.42.0",
+    "dotenv": "^16.0.1"
   }
 }

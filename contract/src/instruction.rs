@@ -1,32 +1,42 @@
 use borsh::BorshDeserialize;
 use solana_program::program_error::ProgramError;
 
-pub enum IntroInstruction {
-    InitUserInput { name: String, message: String },
-    UpdateStudentIntro { name: String, message: String },
+pub enum PrizeInstruction {
+    InitConfig {
+        title: String,
+        rating: u8,
+        description: String,
+    },
+    UpdateConfig {
+        title: String,
+        rating: u8,
+        description: String,
+    },
 }
 
-#[derive(BorshDeserialize, Debug)]
-struct StudentIntroPayload {
-    name: String,
-    message: String,
+#[derive(BorshDeserialize)]
+struct ConfigPayload {
+    title: String,
+    rating: u8,
+    description: String,
 }
 
-impl IntroInstruction {
+impl PrizeInstruction {
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
-        let (variant, rest) = input
+        let (&variant, rest) = input
             .split_first()
             .ok_or(ProgramError::InvalidInstructionData)?;
-        let payload = StudentIntroPayload::try_from_slice(rest).unwrap();
-
+        let payload = ConfigPayload::try_from_slice(rest).unwrap();
         Ok(match variant {
-            0 => Self::InitUserInput {
-                name: payload.name,
-                message: payload.message,
+            0 => Self::InitConfig {
+                title: payload.title,
+                rating: payload.rating,
+                description: payload.description,
             },
-            1 => Self::UpdateStudentIntro {
-                name: payload.name,
-                message: payload.message,
+            1 => Self::UpdateConfig {
+                title: payload.title,
+                rating: payload.rating,
+                description: payload.description,
             },
             _ => return Err(ProgramError::InvalidInstructionData),
         })

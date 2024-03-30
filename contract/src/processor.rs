@@ -1,6 +1,6 @@
-use crate::error::StudentIntroError;
-use crate::instruction::IntroInstruction;
-use crate::state::StudentInfo;
+use crate::error::PrizeError;
+use crate::instruction::PrizeInstruction;
+use crate::state::ConfigState;
 use borsh::BorshSerialize;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -21,45 +21,64 @@ pub fn process_instruction(
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
-    let instruction = IntroInstruction::unpack(instruction_data)?;
+    let instruction = PrizeInstruction::unpack(instruction_data)?;
     match instruction {
-        IntroInstruction::InitUserInput { name, message } => {
-            add_student_intro(program_id, accounts, name, message)
-        }
-        IntroInstruction::UpdateStudentIntro { name, message } => {
-            update_student_intro(program_id, accounts, name, message)
-        }
+        PrizeInstruction::InitConfig {
+            title,
+            rating,
+            description,
+        } => init_config(program_id, accounts, title, rating, description),
+        PrizeInstruction::UpdateConfig {
+            title,
+            rating,
+            description,
+        } => update_config(program_id, accounts, title, rating, description),
     }
 }
 
-pub fn add_student_intro(
+pub fn init_config(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    name: String,
-    message: String,
+    title: String,
+    rating: u8,
+    description: String,
 ) -> ProgramResult {
-    msg!("Adding student intro...");
-    msg!("Name: {}", name);
-    msg!("Message: {}", message);
+    msg!("Init config");
+    msg!("Title: {}", title);
+    msg!("Rating: {}", rating);
+    msg!("Description: {}", description);
 
     let account_info_iter = &mut accounts.iter();
 
     let initializer = next_account_info(account_info_iter)?;
-    let user_account = next_account_info(account_info_iter)?;
+    let pda_account = next_account_info(account_info_iter)?;
     let system_program = next_account_info(account_info_iter)?;
 
-    let (pda, bump_seed) = Pubkey::find_program_address(&[initializer.key.as_ref()], program_id);
-
-    if pda != *user_account.key {
-        msg!("Invalid seeds for PDA");
-        return Err(StudentIntroError::InvalidPDA.into());
+    if !initializer.is_signer {
+        msg!("Missing required signature");
+        return Err(ProgramError::MissingRequiredSignature);
     }
 
-    let total_len: usize = 1 + (4 + name.len()) + (4 + message.len());
+    let (pda, bump_seed) = Pubkey::find_program_address(
+        &[initializer.key.as_ref(), "config-prize".as_bytes().as_ref()],
+        program_id,
+    );
+    if pda != *pda_account.key {
+        msg!("Invalid seeds for PDA");
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    if rating > 5 || rating < 1 {
+        msg!("Rating cannot be higher than 5");
+        return Err(PrizeError::InvalidRating.into());
+    }
+
+    let total_len: usize = 1 + 1 + (4 + title.len()) + (4 + description.len());
     if total_len > 1000 {
         msg!("Data length is larger than 1000 bytes");
-        return Err(StudentIntroError::InvalidDataLength.into());
+        return Err(PrizeError::InvalidDataLength.into());
     }
+
     let account_len: usize = 1000;
 
     let rent = Rent::get()?;
@@ -68,91 +87,117 @@ pub fn add_student_intro(
     invoke_signed(
         &system_instruction::create_account(
             initializer.key,
-            user_account.key,
+            pda_account.key,
             rent_lamports,
             account_len.try_into().unwrap(),
             program_id,
         ),
         &[
             initializer.clone(),
-            user_account.clone(),
+            pda_account.clone(),
             system_program.clone(),
         ],
-        &[&[initializer.key.as_ref(), &[bump_seed]]],
+        &[&[
+            initializer.key.as_ref(),
+            title.as_bytes().as_ref(),
+            &[bump_seed],
+        ]],
     )?;
 
     msg!("PDA created: {}", pda);
 
     msg!("unpacking state account");
     let mut account_data =
-        try_from_slice_unchecked::<StudentInfo>(&user_account.data.borrow()).unwrap();
+        try_from_slice_unchecked::<ConfigState>(&pda_account.data.borrow()).unwrap();
     msg!("borrowed account data");
 
-    msg!("checking if account is already initialized");
+    msg!("checking if movie account is already initialized");
     if account_data.is_initialized() {
         msg!("Account already initialized");
         return Err(ProgramError::AccountAlreadyInitialized);
     }
 
-    account_data.name = name;
-    account_data.msg = message;
+    account_data.title = title;
+    account_data.rating = rating;
+    account_data.description = description;
     account_data.is_initialized = true;
 
     msg!("serializing account");
-    account_data.serialize(&mut &mut user_account.data.borrow_mut()[..])?;
+    account_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
     msg!("state account serialized");
 
     Ok(())
 }
 
-pub fn update_student_intro(
+pub fn update_config(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    name: String,
-    message: String,
+    _title: String,
+    rating: u8,
+    description: String,
 ) -> ProgramResult {
-    msg!("Updating student intro...");
-    msg!("Name: {}", name);
-    msg!("Message: {}", message);
+    msg!("Updating config");
 
     let account_info_iter = &mut accounts.iter();
 
     let initializer = next_account_info(account_info_iter)?;
-    let user_account = next_account_info(account_info_iter)?;
+    let pda_account = next_account_info(account_info_iter)?;
 
-    msg!("unpacking state account");
-    let mut account_data =
-        try_from_slice_unchecked::<StudentInfo>(&user_account.data.borrow()).unwrap();
-    msg!("borrowed account data");
-
-    msg!("checking if account is initialized");
-    if !account_data.is_initialized() {
-        msg!("Account is not initialized");
-        return Err(StudentIntroError::UninitializedAccount.into());
-    }
-
-    if user_account.owner != program_id {
+    if pda_account.owner != program_id {
         return Err(ProgramError::IllegalOwner);
     }
 
-    let (pda, _bump_seed) = Pubkey::find_program_address(&[initializer.key.as_ref()], program_id);
-
-    if pda != *user_account.key {
-        msg!("Invalid seeds for PDA");
-        return Err(StudentIntroError::InvalidPDA.into());
+    if !initializer.is_signer {
+        msg!("Missing required signature");
+        return Err(ProgramError::MissingRequiredSignature);
     }
 
-    let update_len: usize = 1 + (4 + account_data.name.len()) + (4 + message.len());
+    msg!("unpacking state account");
+    let mut account_data =
+        try_from_slice_unchecked::<ConfigState>(&pda_account.data.borrow()).unwrap();
+    msg!("review title: {}", account_data.title);
+
+    let (pda, _bump_seed) = Pubkey::find_program_address(
+        &[initializer.key.as_ref(), "config-prize".as_bytes().as_ref()],
+        program_id,
+    );
+    if pda != *pda_account.key {
+        msg!("Invalid seeds for PDA");
+        return Err(PrizeError::InvalidPDA.into());
+    }
+
+    msg!("checking if movie account is initialized");
+    if !account_data.is_initialized() {
+        msg!("Account is not initialized");
+        return Err(PrizeError::UninitializedAccount.into());
+    }
+
+    if rating > 5 || rating < 1 {
+        msg!("Invalid Rating");
+        return Err(PrizeError::InvalidRating.into());
+    }
+
+    let update_len: usize = 1 + 1 + (4 + description.len()) + account_data.title.len();
     if update_len > 1000 {
         msg!("Data length is larger than 1000 bytes");
-        return Err(StudentIntroError::InvalidDataLength.into());
+        return Err(PrizeError::InvalidDataLength.into());
     }
 
-    account_data.name = account_data.name;
-    account_data.msg = message;
+    msg!("Review before update:");
+    msg!("Title: {}", account_data.title);
+    msg!("Rating: {}", account_data.rating);
+    msg!("Description: {}", account_data.description);
+
+    account_data.rating = rating;
+    account_data.description = description;
+
+    msg!("Review after update:");
+    msg!("Title: {}", account_data.title);
+    msg!("Rating: {}", account_data.rating);
+    msg!("Description: {}", account_data.description);
 
     msg!("serializing account");
-    account_data.serialize(&mut &mut user_account.data.borrow_mut()[..])?;
+    account_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
     msg!("state account serialized");
 
     Ok(())
