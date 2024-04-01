@@ -81,6 +81,7 @@ pub fn process_instruction(
             start_time,
             end_time,
         ),
+        PrizeInstruction::Claim {} => claim(program_id, accounts),
     }
 }
 
@@ -164,7 +165,7 @@ pub fn init_config(
         try_from_slice_unchecked::<ConfigState>(&pda_account.data.borrow()).unwrap();
     msg!("borrowed account data");
 
-    msg!("checking if movie account is already initialized");
+    msg!("checking if config account is already initialized");
     if account_data.is_initialized() {
         msg!("Account already initialized");
         return Err(ProgramError::AccountAlreadyInitialized);
@@ -236,7 +237,7 @@ pub fn update_config(
         return Err(PrizeError::InvalidPDA.into());
     }
 
-    msg!("checking if movie account is initialized");
+    msg!("checking if config account is initialized");
     if !account_data.is_initialized() {
         msg!("Account is not initialized");
         return Err(PrizeError::UninitializedAccount.into());
@@ -271,4 +272,66 @@ pub fn update_config(
     msg!("state account serialized");
 
     Ok(())
+}
+
+pub fn claim(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
+    msg!("Claimming ...");
+
+    let account_info_iter = &mut accounts.iter();
+
+    let initializer = next_account_info(account_info_iter)?;
+    let pda_account = next_account_info(account_info_iter)?;
+    let claim_account = next_account_info(account_info_iter)?;
+
+    if !claim_account.is_signer {
+        msg!("Missing required signature");
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    msg!("unpacking state account");
+    let mut account_data =
+        try_from_slice_unchecked::<ConfigState>(&pda_account.data.borrow()).unwrap();
+
+    let (pda, _bump_seed) = Pubkey::find_program_address(
+        &[initializer.key.as_ref(), "config-prize".as_bytes().as_ref()],
+        program_id,
+    );
+    if pda != *pda_account.key {
+        msg!("Invalid seeds for PDA");
+        return Err(PrizeError::InvalidPDA.into());
+    }
+
+    msg!("checking if config account is initialized");
+    if !account_data.is_initialized() {
+        msg!("Account is not initialized");
+        return Err(PrizeError::UninitializedAccount.into());
+    }
+
+    let prize = get_prize(&claim_account.key, &account_data);
+
+    msg!("Prize: {:?}", prize);
+
+    account_data.is_first_claimed = true;
+
+    msg!("serializing account");
+    account_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
+    msg!("state account serialized");
+
+    Ok(())
+}
+
+fn get_prize(account: &Pubkey, config: &ConfigState) -> (u64, u8) {
+    if account == &config.first_account {
+        return (config.first_prize.clone(), 1u8);
+    }
+
+    if account == &config.second_account {
+        return (config.second_prize.clone(), 2u8);
+    }
+
+    if account == &config.third_account {
+        return (config.third_prize.clone(), 3u8);
+    }
+
+    (0u64, 0u8)
 }

@@ -9,7 +9,7 @@ dotenv.config();
 function initializeSignerKeypair(): web3.Keypair {
   // Onwer keypair
   const ownerKeypair = web3.Keypair.fromSecretKey(
-    base58.decode(process.env.PRIVATE_KEY!)
+    base58.decode(process.env.CLAIM_PRIVATE_KEY!)
   );
   return ownerKeypair;
 }
@@ -59,40 +59,21 @@ export const getConfig = async (
   }
 };
 
-async function initConfig(
-  signer: web3.Keypair,
+async function claim(
+  claimSigner: web3.Keypair,
   programId: web3.PublicKey,
   connection: web3.Connection
 ) {
-  const accountTest = new web3.Keypair();
-  const nowTime = Number((new Date().getTime() / 1000).toFixed(0));
-  const startTime = nowTime;
-  const endTime = nowTime + 1000000;
-
-  let buffer = Buffer.alloc(1000);
+  let claimBuffer = Buffer.alloc(1000);
   configInstructionLayout.encode(
     {
-      variant: 0,
-      total_prize: new BN(10000),
-      first_prize: new BN(30000),
-      second_prize: new BN(40000),
-      third_prize: new BN(5000),
-      first_account: accountTest.publicKey,
-      second_account: accountTest.publicKey,
-      third_account: accountTest.publicKey,
-      is_first_claimed: false,
-      is_second_claimed: false,
-      is_third_claimed: false,
-      start_time: new BN(startTime),
-      end_time: new BN(endTime),
+      variant: 2,
     },
-    buffer
+    claimBuffer
   );
-
-  buffer = buffer.slice(0, configInstructionLayout.getSpan(buffer));
-
+  const ownerPublicKey = new web3.PublicKey("");
   const [pda] = await web3.PublicKey.findProgramAddress(
-    [signer.publicKey.toBuffer(), Buffer.from("config-prize")],
+    [ownerPublicKey.toBuffer(), Buffer.from("config-prize")],
     programId
   );
 
@@ -100,93 +81,28 @@ async function initConfig(
 
   const transaction = new web3.Transaction();
 
-  const instruction = new web3.TransactionInstruction({
-    programId: programId,
-    data: buffer,
-    keys: [
-      {
-        pubkey: signer.publicKey,
-        isSigner: true,
-        isWritable: false,
-      },
-      {
-        pubkey: pda,
-        isSigner: false,
-        isWritable: true,
-      },
-      {
-        pubkey: web3.SystemProgram.programId,
-        isSigner: false,
-        isWritable: false,
-      },
-    ],
-  });
-
-  transaction.add(instruction);
-  const tx = await web3.sendAndConfirmTransaction(connection, transaction, [
-    signer,
-  ]);
-  console.log(`https://explorer.solana.com/tx/${tx}?cluster=devnet`);
-}
-
-async function updateConfig(
-  signer: web3.Keypair,
-  programId: web3.PublicKey,
-  connection: web3.Connection
-) {
-  const initPublickey = new web3.PublicKey(
-    "1nc1nerator11111111111111111111111111111111"
-  );
-  const nowTime = Number((new Date().getTime() / 1000).toFixed(0));
-  const startTime = nowTime;
-  const endTime = nowTime + 1000000;
-
-  let updateBuffer = Buffer.alloc(1000);
-  configInstructionLayout.encode(
-    {
-      variant: 1,
-      total_prize: new BN(190000),
-      first_prize: new BN(390000),
-      second_prize: new BN(490000),
-      third_prize: new BN(59000),
-      first_account: initPublickey,
-      second_account: initPublickey,
-      third_account: initPublickey,
-      is_first_claimed: false,
-      is_second_claimed: false,
-      is_third_claimed: false,
-      start_time: new BN(startTime),
-      end_time: new BN(endTime),
-    },
-    updateBuffer
-  );
-
-  const [pda] = await web3.PublicKey.findProgramAddress(
-    [signer.publicKey.toBuffer(), Buffer.from("config-prize")],
-    programId
-  );
-
-  console.log("PDA is:", pda.toBase58());
-
-  const transaction = new web3.Transaction();
-
-  updateBuffer = updateBuffer.slice(
+  claimBuffer = claimBuffer.slice(
     0,
-    configInstructionLayout.getSpan(updateBuffer)
+    configInstructionLayout.getSpan(claimBuffer)
   );
 
-  const updateInstruction = new web3.TransactionInstruction({
+  const claimInstruction = new web3.TransactionInstruction({
     programId: programId,
-    data: updateBuffer,
+    data: claimBuffer,
     keys: [
       {
-        pubkey: signer.publicKey,
-        isSigner: true,
+        pubkey: ownerPublicKey,
+        isSigner: false,
         isWritable: false,
       },
       {
         pubkey: pda,
         isSigner: false,
+        isWritable: true,
+      },
+      {
+        pubkey: claimSigner.publicKey,
+        isSigner: true,
         isWritable: true,
       },
       {
@@ -196,27 +112,25 @@ async function updateConfig(
       },
     ],
   });
-  transaction.add(updateInstruction);
+  transaction.add(claimInstruction);
 
   const tx = await web3.sendAndConfirmTransaction(connection, transaction, [
-    signer,
+    claimSigner,
   ]);
   console.log(`https://explorer.solana.com/tx/${tx}?cluster=devnet`);
 }
 
 async function main() {
-  const signer = initializeSignerKeypair();
+  const claimSigner = initializeSignerKeypair();
 
   const connection = new web3.Connection(web3.clusterApiUrl("devnet"));
-
   const PDA = new web3.PublicKey("aXRun3U7XHyri96YVTAeuPccUcBcEkJPTN1UwdHcFkQ");
   const prizeProgramId = new web3.PublicKey(
     "6T79HdAoKWtBRjAngMWcCeVnrwFJhPJ4bWvwFsQzfv8z"
   );
   // await initConfig(signer, prizeProgramId, connection);
   await getConfig(PDA, connection);
-
-  await updateConfig(signer, prizeProgramId, connection);
+  await claim(claimSigner, prizeProgramId, connection);
   await getConfig(PDA, connection);
 }
 
