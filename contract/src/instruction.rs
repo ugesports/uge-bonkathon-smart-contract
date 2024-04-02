@@ -32,6 +32,7 @@ pub enum PrizeInstruction {
     },
 
     Claim {},
+    Close {},
 }
 
 #[derive(BorshDeserialize)]
@@ -86,6 +87,7 @@ impl PrizeInstruction {
                 end_time: payload.end_time,
             },
             2 => Self::Claim {},
+            3 => Self::Close {},
             _ => return Err(ProgramError::InvalidInstructionData),
         })
     }

@@ -6,6 +6,7 @@
   "scripts": {
     "start": "ts-node src/index.ts",
     "claim": "ts-node src/claim.ts",
+    "close": "ts-node src/close.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

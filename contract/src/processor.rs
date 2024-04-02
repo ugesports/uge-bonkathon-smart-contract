@@ -82,6 +82,7 @@ pub fn process_instruction(
             end_time,
         ),
         PrizeInstruction::Claim {} => claim(program_id, accounts),
+        PrizeInstruction::Close {} => close(program_id, accounts),
     }
 }
 
@@ -348,6 +349,33 @@ pub fn claim(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     msg!("state account serialized");
 
     Ok(())
+}
+
+pub fn close(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
+    msg!("Closing program ...");
+
+    let account_info_iter = &mut accounts.iter();
+
+    let initializer = next_account_info(account_info_iter)?;
+    let pda_account = next_account_info(account_info_iter)?;
+
+    if pda_account.owner != program_id {
+        return Err(ProgramError::IllegalOwner);
+    }
+
+    if !initializer.is_signer {
+        msg!("Missing required signature");
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    let pda_account_lamports = pda_account.lamports();
+    if pda_account_lamports == 0u64 {
+        return Err(ProgramError::InsufficientFunds);
+    }
+    **pda_account.try_borrow_mut_lamports()? -= pda_account_lamports;
+    **initializer.try_borrow_mut_lamports()? += pda_account_lamports;
+
+    return Ok(());
 }
 
 fn get_prize(account: &Pubkey, config: &ConfigState) -> (u8, bool, u64) {
