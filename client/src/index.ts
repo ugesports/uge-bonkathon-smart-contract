@@ -142,16 +142,19 @@ async function updateConfig(
   const endTime = nowTime + 1000000;
 
   let updateBuffer = Buffer.alloc(1000);
+  const decimal = 10 ** 9;
   configInstructionLayout.encode(
     {
       variant: 1,
-      total_prize: new BN(190000),
-      first_prize: new BN(390000),
-      second_prize: new BN(490000),
-      third_prize: new BN(59000),
+      total_prize: new BN(10 * decimal),
+      first_prize: new BN(5 * decimal),
+      second_prize: new BN(3 * decimal),
+      third_prize: new BN(2 * decimal),
       first_account: initPublickey,
       second_account: initPublickey,
-      third_account: initPublickey,
+      third_account: new web3.PublicKey(
+        "9awnhANDAD7CajDNxvzK5MzGfwXLK7f1JHzBnknXrz3p"
+      ),
       is_first_claimed: false,
       is_second_claimed: false,
       is_third_claimed: false,

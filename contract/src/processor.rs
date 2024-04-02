@@ -7,7 +7,7 @@ use solana_program::{
     borsh0_10::try_from_slice_unchecked,
     entrypoint::ProgramResult,
     msg,
-    program::invoke_signed,
+    program::{invoke, invoke_signed},
     program_error::ProgramError,
     program_pack::IsInitialized,
     pubkey::Pubkey,
@@ -292,7 +292,7 @@ pub fn claim(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     let mut account_data =
         try_from_slice_unchecked::<ConfigState>(&pda_account.data.borrow()).unwrap();
 
-    let (pda, _bump_seed) = Pubkey::find_program_address(
+    let (pda, bump_seed) = Pubkey::find_program_address(
         &[initializer.key.as_ref(), "config-prize".as_bytes().as_ref()],
         program_id,
     );
@@ -309,9 +309,43 @@ pub fn claim(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
 
     let prize = get_prize(&claim_account.key, &account_data);
 
-    msg!("Prize: {:?}", prize);
+    msg!("Prize: {} {}", prize.0, prize.1);
+    if prize.0 == 0u8 {
+        msg!("Account is not a winner");
+        return Err(PrizeError::NotWinner.into());
+    }
 
-    account_data.is_first_claimed = true;
+    msg!(
+        "Transfer {} SOL (lamports) -> account: {}",
+        prize.1,
+        claim_account.key
+    );
+
+    let system_program = next_account_info(account_info_iter)?;
+    msg!("PDA account: {:?}", pda.clone());
+    let transfer_sol_to_winner = system_instruction::transfer(&pda, claim_account.key, prize.1);
+
+    // let signer = [
+    //     [initializer.key.as_ref(), "config-prize".as_bytes().as_ref()][..],
+    //     &[bump_seed],
+    // ];
+    // invoke_signed(
+    //     &transfer_sol_to_winner,
+    //     &[system_program.clone(), claim_account.clone()],
+    //     &[&signer],
+    // )?;
+
+    if prize.0 == 1 {
+        account_data.is_first_claimed = true;
+    }
+
+    if prize.0 == 2 {
+        account_data.is_second_claimed = true;
+    }
+
+    if prize.0 == 3 {
+        account_data.is_third_claimed = true;
+    }
 
     msg!("serializing account");
     account_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
@@ -320,18 +354,18 @@ pub fn claim(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     Ok(())
 }
 
-fn get_prize(account: &Pubkey, config: &ConfigState) -> (u64, u8) {
+fn get_prize(account: &Pubkey, config: &ConfigState) -> (u8, u64) {
     if account == &config.first_account {
-        return (config.first_prize.clone(), 1u8);
+        return (1u8, config.first_prize.clone());
     }
 
     if account == &config.second_account {
-        return (config.second_prize.clone(), 2u8);
+        return (2u8, config.second_prize.clone());
     }
 
     if account == &config.third_account {
-        return (config.third_prize.clone(), 3u8);
+        return (3u8, config.third_prize.clone());
     }
 
-    (0u64, 0u8)
+    (0u8, 0u64)
 }

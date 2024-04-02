@@ -9,6 +9,9 @@ pub enum PrizeError {
     #[error("PDA derived does not equal PDA passed in")]
     InvalidPDA,
 
+    #[error("Account is not a winner")]
+    NotWinner,
+
     #[error("Input data exceeds max length")]
     InvalidDataLength,
 

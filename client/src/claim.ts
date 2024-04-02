@@ -71,7 +71,9 @@ async function claim(
     },
     claimBuffer
   );
-  const ownerPublicKey = new web3.PublicKey("");
+  const ownerPublicKey = new web3.PublicKey(
+    "oqjkcsmRX4WVdi4rdmB1YX9mo7NEpz1ySQ7jtKY3Ndr"
+  );
   const [pda] = await web3.PublicKey.findProgramAddress(
     [ownerPublicKey.toBuffer(), Buffer.from("config-prize")],
     programId
@@ -108,7 +110,7 @@ async function claim(
       {
         pubkey: web3.SystemProgram.programId,
         isSigner: false,
-        isWritable: false,
+        isWritable: true,
       },
     ],
   });
@@ -128,7 +130,6 @@ async function main() {
   const prizeProgramId = new web3.PublicKey(
     "6T79HdAoKWtBRjAngMWcCeVnrwFJhPJ4bWvwFsQzfv8z"
   );
-  // await initConfig(signer, prizeProgramId, connection);
   await getConfig(PDA, connection);
   await claim(claimSigner, prizeProgramId, connection);
   await getConfig(PDA, connection);
