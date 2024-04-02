@@ -147,14 +147,14 @@ async function updateConfig(
     {
       variant: 1,
       total_prize: new BN(10 * decimal),
-      first_prize: new BN(5 * decimal),
+      first_prize: new BN(1 * decimal),
       second_prize: new BN(3 * decimal),
       third_prize: new BN(2 * decimal),
-      first_account: initPublickey,
-      second_account: initPublickey,
-      third_account: new web3.PublicKey(
+      first_account: new web3.PublicKey(
         "9awnhANDAD7CajDNxvzK5MzGfwXLK7f1JHzBnknXrz3p"
       ),
+      second_account: initPublickey,
+      third_account: initPublickey,
       is_first_claimed: false,
       is_second_claimed: false,
       is_third_claimed: false,

@@ -7,7 +7,7 @@ use solana_program::{
     borsh0_10::try_from_slice_unchecked,
     entrypoint::ProgramResult,
     msg,
-    program::{invoke, invoke_signed},
+    program::invoke_signed,
     program_error::ProgramError,
     program_pack::IsInitialized,
     pubkey::Pubkey,
@@ -161,32 +161,32 @@ pub fn init_config(
     msg!("PDA created: {}", pda);
 
     msg!("unpacking state account");
-    let mut account_data =
+    let mut config_data =
         try_from_slice_unchecked::<ConfigState>(&pda_account.data.borrow()).unwrap();
     msg!("borrowed account data");
 
     msg!("checking if config account is already initialized");
-    if account_data.is_initialized() {
+    if config_data.is_initialized() {
         msg!("Account already initialized");
         return Err(ProgramError::AccountAlreadyInitialized);
     }
 
-    account_data.total_prize = total_prize;
-    account_data.first_prize = first_prize;
-    account_data.second_prize = second_prize;
-    account_data.third_prize = third_prize;
-    account_data.first_account = first_account;
-    account_data.second_account = second_account;
-    account_data.third_account = third_account;
-    account_data.is_first_claimed = is_first_claimed;
-    account_data.is_second_claimed = is_second_claimed;
-    account_data.is_third_claimed = is_third_claimed;
-    account_data.start_time = start_time;
-    account_data.end_time = end_time;
-    account_data.is_initialized = true;
+    config_data.total_prize = total_prize;
+    config_data.first_prize = first_prize;
+    config_data.second_prize = second_prize;
+    config_data.third_prize = third_prize;
+    config_data.first_account = first_account;
+    config_data.second_account = second_account;
+    config_data.third_account = third_account;
+    config_data.is_first_claimed = is_first_claimed;
+    config_data.is_second_claimed = is_second_claimed;
+    config_data.is_third_claimed = is_third_claimed;
+    config_data.start_time = start_time;
+    config_data.end_time = end_time;
+    config_data.is_initialized = true;
 
     msg!("serializing account");
-    account_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
+    config_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
     msg!("state account serialized");
 
     Ok(())
@@ -225,7 +225,7 @@ pub fn update_config(
     }
 
     msg!("unpacking state account");
-    let mut account_data =
+    let mut config_data =
         try_from_slice_unchecked::<ConfigState>(&pda_account.data.borrow()).unwrap();
 
     let (pda, _bump_seed) = Pubkey::find_program_address(
@@ -238,7 +238,7 @@ pub fn update_config(
     }
 
     msg!("checking if config account is initialized");
-    if !account_data.is_initialized() {
+    if !config_data.is_initialized() {
         msg!("Account is not initialized");
         return Err(PrizeError::UninitializedAccount.into());
     }
@@ -254,21 +254,21 @@ pub fn update_config(
         return Err(PrizeError::InvalidDataLength.into());
     }
 
-    account_data.total_prize = total_prize;
-    account_data.first_prize = first_prize;
-    account_data.second_prize = second_prize;
-    account_data.third_prize = third_prize;
-    account_data.first_account = first_account;
-    account_data.second_account = second_account;
-    account_data.third_account = third_account;
-    account_data.is_first_claimed = is_first_claimed;
-    account_data.is_second_claimed = is_second_claimed;
-    account_data.is_third_claimed = is_third_claimed;
-    account_data.start_time = start_time;
-    account_data.end_time = end_time;
+    config_data.total_prize = total_prize;
+    config_data.first_prize = first_prize;
+    config_data.second_prize = second_prize;
+    config_data.third_prize = third_prize;
+    config_data.first_account = first_account;
+    config_data.second_account = second_account;
+    config_data.third_account = third_account;
+    config_data.is_first_claimed = is_first_claimed;
+    config_data.is_second_claimed = is_second_claimed;
+    config_data.is_third_claimed = is_third_claimed;
+    config_data.start_time = start_time;
+    config_data.end_time = end_time;
 
     msg!("serializing account");
-    account_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
+    config_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
     msg!("state account serialized");
 
     Ok(())
@@ -289,10 +289,10 @@ pub fn claim(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     }
 
     msg!("unpacking state account");
-    let mut account_data =
+    let mut config_data =
         try_from_slice_unchecked::<ConfigState>(&pda_account.data.borrow()).unwrap();
 
-    let (pda, bump_seed) = Pubkey::find_program_address(
+    let (pda, _bump_seed) = Pubkey::find_program_address(
         &[initializer.key.as_ref(), "config-prize".as_bytes().as_ref()],
         program_id,
     );
@@ -302,70 +302,78 @@ pub fn claim(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     }
 
     msg!("checking if config account is initialized");
-    if !account_data.is_initialized() {
+    if !config_data.is_initialized() {
         msg!("Account is not initialized");
         return Err(PrizeError::UninitializedAccount.into());
     }
 
-    let prize = get_prize(&claim_account.key, &account_data);
-
-    msg!("Prize: {} {}", prize.0, prize.1);
-    if prize.0 == 0u8 {
+    let (order, is_claimed, prize_amount) = get_prize(&claim_account.key, &config_data);
+    if order == 0u8 {
         msg!("Account is not a winner");
         return Err(PrizeError::NotWinner.into());
     }
 
+    if is_claimed {
+        msg!("Account claimed");
+        return Err(PrizeError::Claimed.into());
+    }
+
+    if order == 1 {
+        config_data.is_first_claimed = true;
+    }
+
+    if order == 2 {
+        config_data.is_second_claimed = true;
+    }
+
+    if order == 3 {
+        config_data.is_third_claimed = true;
+    }
+    let pda_account_lamports = pda_account.lamports();
+
+    if pda_account_lamports < prize_amount {
+        return Err(ProgramError::InsufficientFunds);
+    }
+
     msg!(
         "Transfer {} SOL (lamports) -> account: {}",
-        prize.1,
+        prize_amount,
         claim_account.key
     );
-
-    let system_program = next_account_info(account_info_iter)?;
-    msg!("PDA account: {:?}", pda.clone());
-    let transfer_sol_to_winner = system_instruction::transfer(&pda, claim_account.key, prize.1);
-
-    // let signer = [
-    //     [initializer.key.as_ref(), "config-prize".as_bytes().as_ref()][..],
-    //     &[bump_seed],
-    // ];
-    // invoke_signed(
-    //     &transfer_sol_to_winner,
-    //     &[system_program.clone(), claim_account.clone()],
-    //     &[&signer],
-    // )?;
-
-    if prize.0 == 1 {
-        account_data.is_first_claimed = true;
-    }
-
-    if prize.0 == 2 {
-        account_data.is_second_claimed = true;
-    }
-
-    if prize.0 == 3 {
-        account_data.is_third_claimed = true;
-    }
+    **pda_account.try_borrow_mut_lamports()? -= prize_amount;
+    **claim_account.try_borrow_mut_lamports()? += prize_amount;
 
     msg!("serializing account");
-    account_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
+    config_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
     msg!("state account serialized");
 
     Ok(())
 }
 
-fn get_prize(account: &Pubkey, config: &ConfigState) -> (u8, u64) {
+fn get_prize(account: &Pubkey, config: &ConfigState) -> (u8, bool, u64) {
     if account == &config.first_account {
-        return (1u8, config.first_prize.clone());
+        return (
+            1u8,
+            config.is_first_claimed.clone(),
+            config.first_prize.clone(),
+        );
     }
 
     if account == &config.second_account {
-        return (2u8, config.second_prize.clone());
+        return (
+            2u8,
+            config.is_second_claimed.clone(),
+            config.second_prize.clone(),
+        );
     }
 
     if account == &config.third_account {
-        return (3u8, config.third_prize.clone());
+        return (
+            3u8,
+            config.is_third_claimed.clone(),
+            config.third_prize.clone(),
+        );
     }
 
-    (0u8, 0u64)
+    (0u8, false, 0u64)
 }
