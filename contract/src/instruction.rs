@@ -1,5 +1,5 @@
 use borsh::BorshDeserialize;
-use solana_program::{program_error::ProgramError, pubkey::Pubkey};
+use solana_program::{msg, program_error::ProgramError, pubkey::Pubkey};
 
 pub enum PrizeInstruction {
     InitConfig {
@@ -56,36 +56,48 @@ impl PrizeInstruction {
         let (&variant, rest) = input
             .split_first()
             .ok_or(ProgramError::InvalidInstructionData)?;
-        let payload = ConfigPayload::try_from_slice(rest).unwrap();
+        msg!(
+            "PrizeInstruction: input {:?}, variant: {:?}, rest: {:?}",
+            input,
+            variant,
+            rest
+        );
+
         Ok(match variant {
-            0 => Self::InitConfig {
-                total_prize: payload.total_prize,
-                first_prize: payload.first_prize,
-                second_prize: payload.second_prize,
-                third_prize: payload.third_prize,
-                first_account: payload.first_account,
-                second_account: payload.second_account,
-                third_account: payload.third_account,
-                is_first_claimed: payload.is_first_claimed,
-                is_second_claimed: payload.is_second_claimed,
-                is_third_claimed: payload.is_third_claimed,
-                start_time: payload.start_time,
-                end_time: payload.end_time,
-            },
-            1 => Self::UpdateConfig {
-                total_prize: payload.total_prize,
-                first_prize: payload.first_prize,
-                second_prize: payload.second_prize,
-                third_prize: payload.third_prize,
-                first_account: payload.first_account,
-                second_account: payload.second_account,
-                third_account: payload.third_account,
-                is_first_claimed: payload.is_first_claimed,
-                is_second_claimed: payload.is_second_claimed,
-                is_third_claimed: payload.is_third_claimed,
-                start_time: payload.start_time,
-                end_time: payload.end_time,
-            },
+            0 => {
+                let payload = ConfigPayload::try_from_slice(rest).unwrap();
+                Self::InitConfig {
+                    total_prize: payload.total_prize,
+                    first_prize: payload.first_prize,
+                    second_prize: payload.second_prize,
+                    third_prize: payload.third_prize,
+                    first_account: payload.first_account,
+                    second_account: payload.second_account,
+                    third_account: payload.third_account,
+                    is_first_claimed: payload.is_first_claimed,
+                    is_second_claimed: payload.is_second_claimed,
+                    is_third_claimed: payload.is_third_claimed,
+                    start_time: payload.start_time,
+                    end_time: payload.end_time,
+                }
+            }
+            1 => {
+                let payload = ConfigPayload::try_from_slice(rest).unwrap();
+                Self::UpdateConfig {
+                    total_prize: payload.total_prize,
+                    first_prize: payload.first_prize,
+                    second_prize: payload.second_prize,
+                    third_prize: payload.third_prize,
+                    first_account: payload.first_account,
+                    second_account: payload.second_account,
+                    third_account: payload.third_account,
+                    is_first_claimed: payload.is_first_claimed,
+                    is_second_claimed: payload.is_second_claimed,
+                    is_third_claimed: payload.is_third_claimed,
+                    start_time: payload.start_time,
+                    end_time: payload.end_time,
+                }
+            }
             2 => Self::Claim {},
             3 => Self::Close {},
             _ => return Err(ProgramError::InvalidInstructionData),

@@ -5,6 +5,7 @@ use borsh::BorshSerialize;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     borsh0_10::try_from_slice_unchecked,
+    clock::Clock,
     entrypoint::ProgramResult,
     msg,
     program::invoke_signed,
@@ -306,6 +307,22 @@ pub fn claim(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     if !config_data.is_initialized() {
         msg!("Account is not initialized");
         return Err(PrizeError::UninitializedAccount.into());
+    }
+
+    // Getting clock directly
+    let clock = Clock::get()?;
+    let current_timestamp = clock.unix_timestamp as u64;
+    msg!(
+        "Current Timestamp: {} , start_time: {}, end_time: {}",
+        current_timestamp,
+        config_data.start_time,
+        config_data.end_time
+    );
+
+    if current_timestamp < config_data.start_time || current_timestamp > config_data.end_time {
+        return Err(ProgramError::BorshIoError(
+            "Invalid time range!".to_string(),
+        ));
     }
 
     let (order, is_claimed, prize_amount) = get_prize(&claim_account.key, &config_data);

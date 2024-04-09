@@ -35,7 +35,7 @@ export const getConfig = async (
   connection: web3.Connection
 ) => {
   const customAccount = await connection.getAccountInfo(signer);
-  // console.log({ customAccount });
+  console.log({ customAccount });
   if (customAccount) {
     const data = configInstructionLayout.decode(
       customAccount ? customAccount.data : null
@@ -146,15 +146,19 @@ async function updateConfig(
   configInstructionLayout.encode(
     {
       variant: 1,
-      total_prize: new BN(10 * decimal),
-      first_prize: new BN(1 * decimal),
-      second_prize: new BN(3 * decimal),
-      third_prize: new BN(2 * decimal),
+      total_prize: new BN(6 * decimal),
+      first_prize: new BN(3 * decimal),
+      second_prize: new BN(2 * decimal),
+      third_prize: new BN(1 * decimal),
       first_account: new web3.PublicKey(
-        "9awnhANDAD7CajDNxvzK5MzGfwXLK7f1JHzBnknXrz3p"
+        "3fVoiFFDtdBG6ZVGeP6wrBKENFjpjbrCWabpRMGJ3Jne"
       ),
-      second_account: initPublickey,
-      third_account: initPublickey,
+      second_account: new web3.PublicKey(
+        "CjpbG49czTy2PLYkkHodLq9GhPYCd8iuNv2EPWE1kHKp"
+      ),
+      third_account: new web3.PublicKey(
+        "HXCYExhtcnqJrvJEfQooPuWibbnxErGkqCRr6x9Coda6"
+      ),
       is_first_claimed: false,
       is_second_claimed: false,
       is_third_claimed: false,
@@ -218,7 +222,6 @@ async function main() {
   );
   // await initConfig(signer, prizeProgramId, connection);
   await getConfig(PDA, connection);
-
   await updateConfig(signer, prizeProgramId, connection);
   await getConfig(PDA, connection);
 }
