@@ -5,25 +5,18 @@ use solana_program::{
 };
 
 #[derive(BorshSerialize, BorshDeserialize)]
-pub struct ConfigState {
+pub struct StakeState {
     pub is_initialized: bool,
-    pub total_prize: u64,
-    pub first_prize: u64,
-    pub second_prize: u64,
-    pub third_prize: u64,
-    pub first_account: Pubkey,
-    pub second_account: Pubkey,
-    pub third_account: Pubkey,
-    pub is_first_claimed: bool,
-    pub is_second_claimed: bool,
-    pub is_third_claimed: bool,
-    pub start_time: u64,
-    pub end_time: u64,
+    pub duration: u64,
+    pub stake_amount: u64,
+    pub start_stake_time: u64,
+    pub end_stake_time: u64,
+    pub is_claimed: bool,
 }
 
-impl Sealed for ConfigState {}
+impl Sealed for StakeState {}
 
-impl IsInitialized for ConfigState {
+impl IsInitialized for StakeState {
     fn is_initialized(&self) -> bool {
         self.is_initialized
     }

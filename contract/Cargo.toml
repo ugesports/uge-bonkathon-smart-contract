@@ -10,6 +10,7 @@ no-entrypoint = []
 [dependencies]
 solana-program = "=1.17.7"
 thiserror = "^1.0.56"
+spl-token = {version = "4.0", features = ["no-entrypoint"]}
 arrayref = "0.3.6"
 ahash = "=0.8.6"
 borsh = "0.10"

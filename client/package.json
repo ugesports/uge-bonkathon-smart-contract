@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node src/index.ts",
-    "claim": "ts-node src/claim.ts",
+    "setup": "ts-node src/setup.ts",
+    "stake": "ts-node src/stake.ts",
+    "withdraw": "ts-node src/withdraw.ts",
     "close": "ts-node src/close.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -17,7 +18,10 @@
     "typescript": "^4.6.4"
   },
   "dependencies": {
+    "@metaplex-foundation/js": "^0.20.1",
+    "@metaplex-foundation/mpl-token-metadata": "^2.8.6",
     "@project-serum/borsh": "^0.2.5",
+    "@solana/spl-token": "^0.4.6",
     "@solana/web3.js": "^1.42.0",
     "bs58": "^5.0.0",
     "dotenv": "^16.0.1"

@@ -1,6 +1,4 @@
-use crate::error::PrizeError;
-use crate::instruction::PrizeInstruction;
-use crate::state::ConfigState;
+use crate::{error::PrizeError, instruction::StakeInstruction, state::StakeState};
 use borsh::BorshSerialize;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -8,7 +6,7 @@ use solana_program::{
     clock::Clock,
     entrypoint::ProgramResult,
     msg,
-    program::invoke_signed,
+    program::{invoke, invoke_signed},
     program_error::ProgramError,
     program_pack::IsInitialized,
     pubkey::Pubkey,
@@ -22,347 +20,208 @@ pub fn process_instruction(
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
-    let instruction = PrizeInstruction::unpack(instruction_data)?;
+    let instruction = StakeInstruction::unpack(instruction_data)?;
     match instruction {
-        PrizeInstruction::InitConfig {
-            total_prize,
-            first_prize,
-            second_prize,
-            third_prize,
-            first_account,
-            second_account,
-            third_account,
-            is_first_claimed,
-            is_second_claimed,
-            is_third_claimed,
-            start_time,
-            end_time,
-        } => init_config(
-            program_id,
-            accounts,
-            total_prize,
-            first_prize,
-            second_prize,
-            third_prize,
-            first_account,
-            second_account,
-            third_account,
-            is_first_claimed,
-            is_second_claimed,
-            is_third_claimed,
-            start_time,
-            end_time,
-        ),
-        PrizeInstruction::UpdateConfig {
-            total_prize,
-            first_prize,
-            second_prize,
-            third_prize,
-            first_account,
-            second_account,
-            third_account,
-            is_first_claimed,
-            is_second_claimed,
-            is_third_claimed,
-            start_time,
-            end_time,
-        } => update_config(
-            program_id,
-            accounts,
-            total_prize,
-            first_prize,
-            second_prize,
-            third_prize,
-            first_account,
-            second_account,
-            third_account,
-            is_first_claimed,
-            is_second_claimed,
-            is_third_claimed,
-            start_time,
-            end_time,
-        ),
-        PrizeInstruction::Claim {} => claim(program_id, accounts),
-        PrizeInstruction::Close {} => close(program_id, accounts),
+        StakeInstruction::Stake {
+            duration,
+            stake_amount,
+        } => stake(program_id, accounts, duration, stake_amount),
+        StakeInstruction::Withdraw {} => withdraw(program_id, accounts),
+        StakeInstruction::Close {} => close(program_id, accounts),
     }
 }
 
-pub fn init_config(
+pub fn stake(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    total_prize: u64,
-    first_prize: u64,
-    second_prize: u64,
-    third_prize: u64,
-    first_account: Pubkey,
-    second_account: Pubkey,
-    third_account: Pubkey,
-    is_first_claimed: bool,
-    is_second_claimed: bool,
-    is_third_claimed: bool,
-    start_time: u64,
-    end_time: u64,
+    duration: u64,
+    stake_amount: u64,
 ) -> ProgramResult {
-    msg!("Init config");
+    msg!("Stake: {}, amount: {}", duration, stake_amount);
     let account_info_iter = &mut accounts.iter();
 
-    let initializer = next_account_info(account_info_iter)?;
-    let pda_account = next_account_info(account_info_iter)?;
+    let staker_account_info = next_account_info(account_info_iter)?;
+    let pda_staker_account = next_account_info(account_info_iter)?;
     let system_program = next_account_info(account_info_iter)?;
+    let staker_token_account_info = next_account_info(account_info_iter)?;
+    let reward_pool_token_account_info = next_account_info(account_info_iter)?;
+    let token_program = next_account_info(account_info_iter)?;
+    let pda_program = next_account_info(account_info_iter)?;
+    let prize_pool_ata = next_account_info(account_info_iter)?;
 
-    if !initializer.is_signer {
+    if !staker_account_info.is_signer {
         msg!("Missing required signature");
         return Err(ProgramError::MissingRequiredSignature);
     }
 
+    if *reward_pool_token_account_info.owner != spl_token::id() {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+
     let (pda, bump_seed) = Pubkey::find_program_address(
-        &[initializer.key.as_ref(), "config-prize".as_bytes().as_ref()],
+        &[
+            staker_account_info.key.as_ref(),
+            "stake".as_bytes().as_ref(),
+        ],
         program_id,
     );
-    if pda != *pda_account.key {
+    if pda != *pda_staker_account.key {
         msg!("Invalid seeds for PDA");
         return Err(ProgramError::InvalidArgument);
     }
 
-    if start_time > end_time {
-        msg!("Start time cannot be higher than End time");
-        return Err(PrizeError::InvalidTime.into());
+    let pda_staker_account_lamports = pda_staker_account.lamports();
+    if pda_staker_account_lamports == 0u64 {
+        let total_len: usize = 1 + 1 + 4 * 4;
+        if total_len > 1000 {
+            msg!("Data length is larger than 1000 bytes");
+            return Err(PrizeError::InvalidDataLength.into());
+        }
+
+        let account_len: usize = 1000;
+
+        let rent = Rent::get()?;
+        let rent_lamports = rent.minimum_balance(account_len);
+
+        invoke_signed(
+            &system_instruction::create_account(
+                staker_account_info.key,
+                pda_staker_account.key,
+                rent_lamports,
+                account_len.try_into().unwrap(),
+                program_id,
+            ),
+            &[
+                staker_account_info.clone(),
+                pda_staker_account.clone(),
+                system_program.clone(),
+            ],
+            &[&[
+                staker_account_info.key.as_ref(),
+                "stake".as_bytes().as_ref(),
+                &[bump_seed],
+            ]],
+        )?;
+        msg!("PDA created: {}", pda);
     }
 
-    let total_len: usize = 1 + 4 * 1 + 4 * 6 + 32 * 3;
-    if total_len > 1000 {
-        msg!("Data length is larger than 1000 bytes");
-        return Err(PrizeError::InvalidDataLength.into());
-    }
-
-    let account_len: usize = 1000;
-
-    let rent = Rent::get()?;
-    let rent_lamports = rent.minimum_balance(account_len);
-
-    invoke_signed(
-        &system_instruction::create_account(
-            initializer.key,
-            pda_account.key,
-            rent_lamports,
-            account_len.try_into().unwrap(),
-            program_id,
-        ),
-        &[
-            initializer.clone(),
-            pda_account.clone(),
-            system_program.clone(),
-        ],
-        &[&[
-            initializer.key.as_ref(),
-            "config-prize".as_bytes().as_ref(),
-            &[bump_seed],
-        ]],
+    ////////////////////////////////////////////////////////////////
+    msg!("Transfer {} token from staker to reward pool", stake_amount);
+    let transfer_token_to_reward_pool_ix = spl_token::instruction::transfer(
+        token_program.key,
+        staker_token_account_info.key,
+        reward_pool_token_account_info.key,
+        &staker_account_info.key,
+        &[&staker_account_info.key],
+        stake_amount,
     )?;
 
-    msg!("PDA created: {}", pda);
+    invoke(
+        &transfer_token_to_reward_pool_ix,
+        &[
+            staker_token_account_info.clone(),
+            reward_pool_token_account_info.clone(),
+            staker_account_info.clone(),
+            token_program.clone(),
+        ],
+    )?;
 
-    msg!("unpacking state account");
-    let mut config_data =
-        try_from_slice_unchecked::<ConfigState>(&pda_account.data.borrow()).unwrap();
-    msg!("borrowed account data");
+    ////////////////////////////////////////////////////////////////
 
-    msg!("checking if config account is already initialized");
-    if config_data.is_initialized() {
-        msg!("Account already initialized");
-        return Err(ProgramError::AccountAlreadyInitialized);
-    }
+    let (_pda, bump_seed) = Pubkey::find_program_address(&[b"stake"], program_id);
+    msg!(
+        "Transfer {} token from reward pool to prize pool",
+        stake_amount * 5
+    );
+    let transfer_token_to_prize_pool_ix = spl_token::instruction::transfer(
+        token_program.key,
+        reward_pool_token_account_info.key,
+        prize_pool_ata.key,
+        &_pda,
+        &[&_pda],
+        stake_amount * 5,
+    )?;
 
-    config_data.total_prize = total_prize;
-    config_data.first_prize = first_prize;
-    config_data.second_prize = second_prize;
-    config_data.third_prize = third_prize;
-    config_data.first_account = first_account;
-    config_data.second_account = second_account;
-    config_data.third_account = third_account;
-    config_data.is_first_claimed = is_first_claimed;
-    config_data.is_second_claimed = is_second_claimed;
-    config_data.is_third_claimed = is_third_claimed;
-    config_data.start_time = start_time;
-    config_data.end_time = end_time;
-    config_data.is_initialized = true;
+    // invoke_signed(
+    //     &transfer_token_to_prize_pool_ix,
+    //     &[
+    //         reward_pool_token_account_info.clone(),
+    //         prize_pool_ata.clone(),
+    //         pda_program.clone(),
+    //         token_program.clone(),
+    //     ],
+    //     &[&[&b"stake"[..], &[bump_seed]]],
+    // )?;
 
-    msg!("serializing account");
-    config_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
-    msg!("state account serialized");
+    let mut stake_data =
+        try_from_slice_unchecked::<StakeState>(&pda_staker_account.data.borrow()).unwrap();
+
+    let clock = Clock::get()?;
+    let current_timestamp = clock.unix_timestamp as u64;
+
+    stake_data.duration = duration;
+    stake_data.stake_amount = stake_amount;
+    stake_data.start_stake_time = current_timestamp;
+    stake_data.end_stake_time = current_timestamp + duration * 24 * 60 * 60;
+    stake_data.is_claimed = false;
+    stake_data.is_initialized = true;
+
+    stake_data.serialize(&mut &mut pda_staker_account.data.borrow_mut()[..])?;
+    msg!("Finish stake");
 
     Ok(())
 }
 
-pub fn update_config(
-    program_id: &Pubkey,
-    accounts: &[AccountInfo],
-    total_prize: u64,
-    first_prize: u64,
-    second_prize: u64,
-    third_prize: u64,
-    first_account: Pubkey,
-    second_account: Pubkey,
-    third_account: Pubkey,
-    is_first_claimed: bool,
-    is_second_claimed: bool,
-    is_third_claimed: bool,
-    start_time: u64,
-    end_time: u64,
-) -> ProgramResult {
-    msg!("Updating config");
+pub fn withdraw(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
+    msg!("Withdraw ...");
 
     let account_info_iter = &mut accounts.iter();
 
-    let initializer = next_account_info(account_info_iter)?;
-    let pda_account = next_account_info(account_info_iter)?;
+    let staker_account_info = next_account_info(account_info_iter)?;
+    let pda_staker_account = next_account_info(account_info_iter)?;
+    let system_program = next_account_info(account_info_iter)?;
 
-    if pda_account.owner != program_id {
-        return Err(ProgramError::IllegalOwner);
-    }
-
-    if !initializer.is_signer {
+    if !staker_account_info.is_signer {
         msg!("Missing required signature");
         return Err(ProgramError::MissingRequiredSignature);
     }
 
     msg!("unpacking state account");
-    let mut config_data =
-        try_from_slice_unchecked::<ConfigState>(&pda_account.data.borrow()).unwrap();
+    let mut stake_data =
+        try_from_slice_unchecked::<StakeState>(&pda_staker_account.data.borrow()).unwrap();
 
     let (pda, _bump_seed) = Pubkey::find_program_address(
-        &[initializer.key.as_ref(), "config-prize".as_bytes().as_ref()],
+        &[
+            staker_account_info.key.as_ref(),
+            "stake".as_bytes().as_ref(),
+        ],
         program_id,
     );
-    if pda != *pda_account.key {
+    if pda != *pda_staker_account.key {
         msg!("Invalid seeds for PDA");
         return Err(PrizeError::InvalidPDA.into());
-    }
-
-    msg!("checking if config account is initialized");
-    if !config_data.is_initialized() {
-        msg!("Account is not initialized");
-        return Err(PrizeError::UninitializedAccount.into());
-    }
-
-    if start_time > end_time {
-        msg!("Start time cannot be higher than End time");
-        return Err(PrizeError::InvalidTime.into());
-    }
-
-    let total_len: usize = 1 + 4 * 1 + 4 * 6 + 32 * 3;
-    if total_len > 1000 {
-        msg!("Data length is larger than 1000 bytes");
-        return Err(PrizeError::InvalidDataLength.into());
-    }
-
-    config_data.total_prize = total_prize;
-    config_data.first_prize = first_prize;
-    config_data.second_prize = second_prize;
-    config_data.third_prize = third_prize;
-    config_data.first_account = first_account;
-    config_data.second_account = second_account;
-    config_data.third_account = third_account;
-    config_data.is_first_claimed = is_first_claimed;
-    config_data.is_second_claimed = is_second_claimed;
-    config_data.is_third_claimed = is_third_claimed;
-    config_data.start_time = start_time;
-    config_data.end_time = end_time;
-
-    msg!("serializing account");
-    config_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
-    msg!("state account serialized");
-
-    Ok(())
-}
-
-pub fn claim(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
-    msg!("Claimming ...");
-
-    let account_info_iter = &mut accounts.iter();
-
-    let initializer = next_account_info(account_info_iter)?;
-    let pda_account = next_account_info(account_info_iter)?;
-    let claim_account = next_account_info(account_info_iter)?;
-
-    if !claim_account.is_signer {
-        msg!("Missing required signature");
-        return Err(ProgramError::MissingRequiredSignature);
-    }
-
-    msg!("unpacking state account");
-    let mut config_data =
-        try_from_slice_unchecked::<ConfigState>(&pda_account.data.borrow()).unwrap();
-
-    let (pda, _bump_seed) = Pubkey::find_program_address(
-        &[initializer.key.as_ref(), "config-prize".as_bytes().as_ref()],
-        program_id,
-    );
-    if pda != *pda_account.key {
-        msg!("Invalid seeds for PDA");
-        return Err(PrizeError::InvalidPDA.into());
-    }
-
-    msg!("checking if config account is initialized");
-    if !config_data.is_initialized() {
-        msg!("Account is not initialized");
-        return Err(PrizeError::UninitializedAccount.into());
     }
 
     // Getting clock directly
     let clock = Clock::get()?;
     let current_timestamp = clock.unix_timestamp as u64;
     msg!(
-        "Current Timestamp: {} , start_time: {}, end_time: {}",
+        "Current Timestamp: {} , start_stake_time: {}, end_stake_time: {}",
         current_timestamp,
-        config_data.start_time,
-        config_data.end_time
+        stake_data.start_stake_time,
+        stake_data.end_stake_time
     );
 
-    if current_timestamp < config_data.start_time || current_timestamp > config_data.end_time {
-        return Err(ProgramError::BorshIoError(
-            "Invalid time range!".to_string(),
-        ));
-    }
+    // if current_timestamp < stake_data.end_stake_time {
+    //     return Err(ProgramError::BorshIoError(
+    //         "Invalid time range!".to_string(),
+    //     ));
+    // }
 
-    let (order, is_claimed, prize_amount) = get_prize(&claim_account.key, &config_data);
-    if order == 0u8 {
-        msg!("Account is not a winner");
-        return Err(PrizeError::NotWinner.into());
-    }
-
-    if is_claimed {
-        msg!("Account claimed");
-        return Err(PrizeError::Claimed.into());
-    }
-
-    if order == 1 {
-        config_data.is_first_claimed = true;
-    }
-
-    if order == 2 {
-        config_data.is_second_claimed = true;
-    }
-
-    if order == 3 {
-        config_data.is_third_claimed = true;
-    }
-    let pda_account_lamports = pda_account.lamports();
-
-    if pda_account_lamports < prize_amount {
-        return Err(ProgramError::InsufficientFunds);
-    }
-
-    msg!(
-        "Transfer {} SOL (lamports) -> account: {}",
-        prize_amount,
-        claim_account.key
-    );
-    **pda_account.try_borrow_mut_lamports()? -= prize_amount;
-    **claim_account.try_borrow_mut_lamports()? += prize_amount;
+    stake_data.is_claimed = true;
 
     msg!("serializing account");
-    config_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
+    stake_data.serialize(&mut &mut pda_staker_account.data.borrow_mut()[..])?;
     msg!("state account serialized");
 
     Ok(())
@@ -393,32 +252,4 @@ pub fn close(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     **initializer.try_borrow_mut_lamports()? += pda_account_lamports;
 
     return Ok(());
-}
-
-fn get_prize(account: &Pubkey, config: &ConfigState) -> (u8, bool, u64) {
-    if account == &config.first_account {
-        return (
-            1u8,
-            config.is_first_claimed.clone(),
-            config.first_prize.clone(),
-        );
-    }
-
-    if account == &config.second_account {
-        return (
-            2u8,
-            config.is_second_claimed.clone(),
-            config.second_prize.clone(),
-        );
-    }
-
-    if account == &config.third_account {
-        return (
-            3u8,
-            config.is_third_claimed.clone(),
-            config.third_prize.clone(),
-        );
-    }
-
-    (0u8, false, 0u64)
 }
