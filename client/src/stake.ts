@@ -6,8 +6,10 @@ import dotenv from "dotenv";
 import { BN } from "bn.js";
 import {
   AccountLayout,
+  AuthorityType,
   TOKEN_PROGRAM_ID,
   createInitializeAccountInstruction,
+  createSetAuthorityInstruction,
   getAssociatedTokenAddressSync,
   getOrCreateAssociatedTokenAccount,
 } from "@solana/spl-token";
@@ -35,6 +37,7 @@ const stakeLayout = borsh.struct([
   borsh.u8("is_initialized"),
   borsh.u64("duration"),
   borsh.u64("stake_amount"),
+  borsh.u64("reward_stake_amount"),
   borsh.u64("start_stake_time"),
   borsh.u64("end_stake_time"),
   borsh.bool("is_claimed"),
@@ -58,6 +61,7 @@ export const getStake = async (
     const stakeInfo = {
       duration: data["duration"].toString(),
       stake_amount: data["stake_amount"].toString(),
+      reward_stake_amount: data["reward_stake_amount"].toString(),
       is_claimed: data["is_claimed"].toString(),
       start_stake_time: data["start_stake_time"].toString(),
       end_stake_time: data["end_stake_time"].toString(),
@@ -80,15 +84,27 @@ async function initContract(staker: web3.Keypair, connection: web3.Connection) {
     programId: TOKEN_PROGRAM_ID,
   });
 
+  const [pda_program] = PublicKey.findProgramAddressSync(
+    [Buffer.from("stake")],
+    StakeProgramId
+  );
+
   const initRewardPoolTokenAccountIx = createInitializeAccountInstruction(
     RewardPoolAccountKeypair.publicKey,
     TokenPubkey,
-    staker.publicKey
+    pda_program
   );
 
+  const setAuthorityIx = createSetAuthorityInstruction(
+    RewardPoolAccountKeypair.publicKey,
+    staker.publicKey,
+    AuthorityType.AccountOwner,
+    StakeProgramId
+  );
   const tx = new web3.Transaction().add(
     createRewardPoolTokenAccountIx,
     initRewardPoolTokenAccountIx
+    // setAuthorityIx
   );
 
   await connection.sendTransaction(tx, [staker, RewardPoolAccountKeypair], {
@@ -109,7 +125,7 @@ async function stake(
     {
       variant: 0,
       duration: new BN(7),
-      stake_amount: new BN(1 * 10 ** 9),
+      stake_amount: new BN(2 * 10 ** 9),
     },
     buffer
   );
@@ -142,13 +158,15 @@ async function stake(
   }
 
   const RewardPoolAccount = new web3.PublicKey(
-    "Hz8fB5cs7jFuAZkUDMX1CEx3aZdjagdvAiE88JGtaSaW"
+    "6eQSgiGEQZPHwR12NAttkNEaAHExXRvkANj5vYGReH3g"
   );
 
   const [pda_program] = PublicKey.findProgramAddressSync(
     [Buffer.from("stake")],
     StakeProgramId
   );
+
+  console.log({ pda_program });
 
   const prizePoolPublic = new web3.PublicKey(
     "2XNCcbF4UXbAQY6pDmHU4b6redJ9xiVMUr6EGh8PiadR"

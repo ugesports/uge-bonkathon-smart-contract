@@ -9,6 +9,7 @@ pub struct StakeState {
     pub is_initialized: bool,
     pub duration: u64,
     pub stake_amount: u64,
+    pub reward_stake_amount: u64,
     pub start_stake_time: u64,
     pub end_stake_time: u64,
     pub is_claimed: bool,
