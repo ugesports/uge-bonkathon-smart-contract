@@ -158,9 +158,9 @@ pub fn stake(
     stake_data.start_stake_time = current_timestamp;
     stake_data.end_stake_time = current_timestamp + duration * 24 * 60 * 60;
     if duration == 1 {
-        stake_data.reward_stake_amount = (15 * stake_amount) / (365 * 100);
+        stake_data.reward_stake_amount = stake_amount + ((15 * stake_amount) / 100);
     } else {
-        stake_data.reward_stake_amount = (7 * 20 * stake_amount) / (365 * 100);
+        stake_data.reward_stake_amount = stake_amount + ((7 * 20 * stake_amount) / 100);
     }
     stake_data.is_claimed = false;
     stake_data.is_initialized = true;
@@ -252,6 +252,11 @@ pub fn withdraw(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult 
     )?;
 
     stake_data.is_claimed = true;
+    stake_data.duration = 0;
+    stake_data.stake_amount = 0;
+    stake_data.start_stake_time = 0;
+    stake_data.end_stake_time = 0;
+    stake_data.reward_stake_amount = 0;
 
     msg!("serializing account");
     stake_data.serialize(&mut &mut pda_staker_account.data.borrow_mut()[..])?;
