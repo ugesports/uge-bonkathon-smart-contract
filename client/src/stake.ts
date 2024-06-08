@@ -6,70 +6,29 @@ import dotenv from "dotenv";
 import { BN } from "bn.js";
 import {
   AccountLayout,
-  AuthorityType,
   TOKEN_PROGRAM_ID,
   createInitializeAccountInstruction,
-  createSetAuthorityInstruction,
   getAssociatedTokenAddressSync,
   getOrCreateAssociatedTokenAccount,
 } from "@solana/spl-token";
 import { PublicKey } from "@metaplex-foundation/js";
+import {
+  RewardPoolAccount,
+  StakeProgramId,
+  TokenPubkey,
+  getPrizePoolPda,
+  getProgramPda,
+  getStake,
+  getUserStakePda,
+  initializeSignerKeypair,
+} from "./util";
 dotenv.config();
-
-let PDAPublicKey: web3.PublicKey;
-const TokenPubkey = new web3.PublicKey(
-  "DPZH9bpvpWkBxtYsf3wWJWPDk2frn1KCbEeyKxZTVJ6V"
-);
-const StakeProgramId = new web3.PublicKey(
-  "AaxErDLdEZw9WgtjAHeB8Lkpbn4KxCN9o7nzmePdcugf"
-);
-
-function initializeSignerKeypair(): web3.Keypair {
-  // Onwer keypair
-  const ownerKeypair = web3.Keypair.fromSecretKey(
-    base58.decode(process.env.STAKER_PRIVATE_KEY!)
-  );
-  console.log("ownerKeypair:", ownerKeypair.publicKey.toBase58());
-  return ownerKeypair;
-}
-
-const stakeLayout = borsh.struct([
-  borsh.u8("is_initialized"),
-  borsh.u64("duration"),
-  borsh.u64("stake_amount"),
-  borsh.u64("reward_stake_amount"),
-  borsh.u64("start_stake_time"),
-  borsh.u64("end_stake_time"),
-  borsh.bool("is_claimed"),
-]);
 
 const stakeInstructionLayout = borsh.struct([
   borsh.u8("variant"),
   borsh.u64("duration"),
   borsh.u64("stake_amount"),
 ]);
-
-export const getStake = async (
-  signer: web3.PublicKey,
-  connection: web3.Connection
-) => {
-  const customAccount = await connection.getAccountInfo(signer);
-  console.log({ customAccount });
-  if (customAccount) {
-    const data = stakeLayout.decode(customAccount ? customAccount.data : null);
-    console.log(data);
-    const stakeInfo = {
-      duration: data["duration"].toString(),
-      stake_amount: data["stake_amount"].toString(),
-      reward_stake_amount: data["reward_stake_amount"].toString(),
-      is_claimed: data["is_claimed"].toString(),
-      start_stake_time: data["start_stake_time"].toString(),
-      end_stake_time: data["end_stake_time"].toString(),
-    };
-    console.log(stakeInfo);
-    return stakeInfo;
-  }
-};
 
 async function initContract(staker: web3.Keypair, connection: web3.Connection) {
   const RewardPoolAccountKeypair = new web3.Keypair();
@@ -84,27 +43,17 @@ async function initContract(staker: web3.Keypair, connection: web3.Connection) {
     programId: TOKEN_PROGRAM_ID,
   });
 
-  const [pda_program] = PublicKey.findProgramAddressSync(
-    [Buffer.from("stake")],
-    StakeProgramId
-  );
+  const ProgramPda = getProgramPda();
 
   const initRewardPoolTokenAccountIx = createInitializeAccountInstruction(
     RewardPoolAccountKeypair.publicKey,
     TokenPubkey,
-    pda_program
+    ProgramPda
   );
 
-  const setAuthorityIx = createSetAuthorityInstruction(
-    RewardPoolAccountKeypair.publicKey,
-    staker.publicKey,
-    AuthorityType.AccountOwner,
-    StakeProgramId
-  );
   const tx = new web3.Transaction().add(
     createRewardPoolTokenAccountIx,
     initRewardPoolTokenAccountIx
-    // setAuthorityIx
   );
 
   await connection.sendTransaction(tx, [staker, RewardPoolAccountKeypair], {
@@ -129,16 +78,9 @@ async function stake(
     },
     buffer
   );
-
   buffer = buffer.slice(0, stakeInstructionLayout.getSpan(buffer));
 
-  const [pda_staker] = await web3.PublicKey.findProgramAddress(
-    [staker.publicKey.toBuffer(), Buffer.from("stake")],
-    programId
-  );
-
-  console.log("PDA Staker is:", pda_staker.toBase58());
-  PDAPublicKey = pda_staker;
+  const stakerPDA = await getUserStakePda(staker.publicKey);
 
   const stakerAta = getAssociatedTokenAddressSync(
     TokenPubkey,
@@ -148,7 +90,6 @@ async function stake(
   const ataStakerAccount = await connection.getAccountInfo(stakerAta);
   console.log({ ataStakerAccount });
   if (!ataStakerAccount) {
-    console.log("create ataStakerAccount", stakerAta);
     await getOrCreateAssociatedTokenAccount(
       connection,
       staker,
@@ -157,27 +98,10 @@ async function stake(
     );
   }
 
-  const RewardPoolAccount = new web3.PublicKey(
-    "6eQSgiGEQZPHwR12NAttkNEaAHExXRvkANj5vYGReH3g"
-  );
+  const ProgramPDA = getProgramPda();
+  const PrizePoolAta = getPrizePoolPda();
 
-  const [pda_program] = PublicKey.findProgramAddressSync(
-    [Buffer.from("stake")],
-    StakeProgramId
-  );
-
-  console.log({ pda_program });
-
-  const prizePoolPublic = new web3.PublicKey(
-    "2XNCcbF4UXbAQY6pDmHU4b6redJ9xiVMUr6EGh8PiadR"
-  );
-  const PrizePoolAta = getAssociatedTokenAddressSync(
-    TokenPubkey,
-    prizePoolPublic
-  );
-  console.log({ PrizePoolAta });
   const transaction = new web3.Transaction();
-
   const instruction = new web3.TransactionInstruction({
     programId: programId,
     data: buffer,
@@ -188,7 +112,7 @@ async function stake(
         isWritable: false,
       },
       {
-        pubkey: pda_staker,
+        pubkey: stakerPDA,
         isSigner: false,
         isWritable: true,
       },
@@ -213,7 +137,7 @@ async function stake(
         isWritable: false,
       },
       {
-        pubkey: pda_program,
+        pubkey: ProgramPDA,
         isSigner: false,
         isWritable: true,
       },
@@ -234,8 +158,8 @@ async function stake(
 
 async function main() {
   const signer = initializeSignerKeypair();
-
   const connection = new web3.Connection(web3.clusterApiUrl("devnet"));
+  const PDAPublicKey = await getUserStakePda(signer.publicKey);
 
   // await initContract(signer, connection);
   await stake(signer, StakeProgramId, connection);

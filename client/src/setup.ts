@@ -30,13 +30,13 @@ dotenv.config();
 
 const transaction = async () => {
   const motherWallet = Keypair.fromSecretKey(
-    bs58.decode(process.env.PRIVATE_KEY!)
+    bs58.decode(process.env.OWNER_PRIVATE_KEY!)
   );
   const decimal = 9;
   const supply = 1 * 10 ** 9;
-  const name = "Bonk1";
-  const symbol = "BONK1";
-  const uri = "https://arweave.net/-0ye6AB8I9sWqWF5Zq0iSOrHELvd2D0Ik1NEkiHU49I";
+  const name = "Bonk";
+  const symbol = "BONK";
+  const uri = "https://arweave.net/ea7kq9iDPbiaceNGAWc9bX7HVKpZzmxZx5wGkXtf3FY";
 
   const mintKeypair = Keypair.generate();
 
