@@ -1,12 +1,4 @@
-#### ⚠️ You should be aware that the contract has not been auditized and that there may be a bug in the action.
-
-# Solana Token Sale Program
-
-<p align="center">
-  <a href="https://solana.com">
-    <img alt="Solana" src="https://i.imgur.com/uBVzyX3.png" width="250" />
-  </a>
-</p>
+# Bonk Hackathon
 
 <p><p>
 
@@ -79,8 +71,8 @@ Run RPC Client for interaction with on-chain program what you published.
 
 ```
 npm run setup
-npm run startTokenSale (which include setup process also)
-npm run buyToken
+npm run stake
+npm run withdraw
 ```
 
 ## Further
